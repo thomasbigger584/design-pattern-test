@@ -7,9 +7,9 @@ public class GithubFile {
     public final String patternName;
     public final String fileName;
     public final InputStream content;
-    public final int size;
+    public final long size;
 
-    public GithubFile(String patternName, String fileName, byte[] bytes, int size) {
+    public GithubFile(String patternName, String fileName, byte[] bytes, long size) {
         this.patternName = patternName;
         this.fileName = fileName;
         this.content = new ByteArrayInputStream(bytes);
@@ -28,7 +28,7 @@ public class GithubFile {
         return content;
     }
 
-    public int getSize() {
+    public long getSize() {
         return size;
     }
 

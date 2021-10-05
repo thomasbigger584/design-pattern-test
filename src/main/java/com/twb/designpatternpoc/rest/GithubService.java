@@ -2,9 +2,11 @@ package com.twb.designpatternpoc.rest;
 
 import com.twb.designpatternpoc.model.GithubFile;
 import okhttp3.ResponseBody;
+import org.apache.commons.io.IOUtils;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,47 +37,47 @@ public class GithubService {
             if (body == null) {
                 throw new IOException("Successful but body is null");
             }
-
-            Map<String, List<GithubFile>> patternMap = new HashMap<>();
-            try (ZipInputStream zis = new ZipInputStream(body.byteStream())) {
-                ZipEntry entry;
-                int offset = 0;
-                while ((entry = zis.getNextEntry()) != null) {
-                    int entrySize = (int) entry.getSize();
-
-
-                    //todo read the files from ZipInputStream correctly, this throws an error
-                    byte[] bytes = new byte[entrySize];
-                    zis.read(bytes, offset, entrySize);
-                    offset = entrySize + 1;
-
-
-                    if (shouldSkipEntry(entry)) {
-                        continue;
-                    }
-
-                    String entryName = entry.getName();
-                    String name = entryName.replace("java-design-patterns-master/", "");
-                    String[] nameSplit = name.split("/");
-                    String patternName = nameSplit[0];
-                    String fileName = nameSplit[nameSplit.length - 1];
-
-                    GithubFile githubFile = new GithubFile(patternName, fileName, bytes, entrySize);
-                    if (patternMap.containsKey(patternName)) {
-                        patternMap.get(patternName).add(githubFile);
-                    } else {
-                        List<GithubFile> githubFileList = new ArrayList<>();
-                        githubFileList.add(githubFile);
-                        patternMap.put(patternName, githubFileList);
-                    }
-                }
-            }
-            return patternMap;
+            return processBody(body);
         }
         throw new IOException("Error occurred fetching zip file: " + response.toString());
     }
 
-    private static boolean shouldSkipEntry(ZipEntry entry) {
+    private Map<String, List<GithubFile>> processBody(ResponseBody body) throws IOException {
+        Map<String, List<GithubFile>> patternMap = new HashMap<>();
+        try (ZipInputStream zis = new ZipInputStream(body.byteStream())) {
+
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (shouldSkipEntry(entry)) {
+                    continue;
+                }
+                int length = (int) entry.getSize() - 1;
+                ByteArrayOutputStream os = new ByteArrayOutputStream(length);
+                IOUtils.copyLarge(zis, os, 0, length, new byte[length]);
+
+                byte[] bytes = os.toByteArray();
+                os.close();
+
+                String entryName = entry.getName();
+                String name = entryName.replace("java-design-patterns-master/", "");
+                String[] nameSplit = name.split("/");
+                String patternName = nameSplit[0];
+                String fileName = nameSplit[nameSplit.length - 1];
+
+                GithubFile githubFile = new GithubFile(patternName, fileName, bytes, entry.getSize());
+                if (patternMap.containsKey(patternName)) {
+                    patternMap.get(patternName).add(githubFile);
+                } else {
+                    List<GithubFile> githubFileList = new ArrayList<>();
+                    githubFileList.add(githubFile);
+                    patternMap.put(patternName, githubFileList);
+                }
+            }
+        }
+        return patternMap;
+    }
+
+    private boolean shouldSkipEntry(ZipEntry entry) {
         Pattern pattern = Pattern.compile("java-design-patterns-master\\/.*\\/src\\/main\\/java\\/com\\/iluwatar\\/.*\\.java", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(entry.getName());
         return entry.isDirectory() || !matcher.matches();
